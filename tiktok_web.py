@@ -443,13 +443,19 @@ class Session:
 
             while True:
                 self.__wait(LOCATORS['SEARCH_user_container'], 5)
-                elements = WebDriverWait(self.driver, 0).until(
-                    EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
+                try:
+                    elements = WebDriverWait(self.driver, 0).until(EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
+                except WaitException:
+                    self.logger.info(f"no usernames found with search phrase: {searched_phrase}, trying again")
+                    try:
+                        elements = WebDriverWait(self.driver, 0).until(EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
+                    except WaitException:
+                        self.logger.error(f"no usernames found with search phrase: {searched_phrase}")           
+
 
                 old_len = len(usernames)
                 for el in elements:
-                    username = el.find_element(by=By.XPATH, value=LOCATORS['SEARCH_user_container_href']).get_attribute(
-                        "href").replace("https://www.tiktok.com/@", "").replace("?lang=en", "")
+                    username = el.find_element(by=By.XPATH, value=LOCATORS['SEARCH_user_container_href']).get_attribute("href").replace("https://www.tiktok.com/@", "").replace("?lang=en", "")
 
                     # -------skip if verified
                     if skip_verified:
