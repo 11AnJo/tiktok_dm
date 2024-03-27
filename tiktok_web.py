@@ -451,7 +451,7 @@ class Session:
                         elements = WebDriverWait(self.driver, 0).until(EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
                     except WaitException:
                         self.logger.error(f"no usernames found with search phrase: {searched_phrase}")           
-
+                        return usernames
 
                 old_len = len(usernames)
                 for el in elements:
