@@ -169,8 +169,8 @@ class Session:
 
         return uc.Chrome(options=options,
                          # driver_executable_path='chromedriver',
-                         browser_executable_path=r"C:\\Users\\test\\Desktop\\chromedriver\\chrome.exe")
-
+                         #browser_executable_path=r"C:\\Users\\test\\Desktop\\chromedriver\\chrome.exe", driver_executable_path="C:\\Users\\test\\Desktop\\chromedriver\\chromedriver.exe")
+        )
     def __wait_and_click(self, xpath, time=5):
         self.logger.debug(
             f'__wait_and_click() - called with xpath: {xpath}, time: {time}')
@@ -328,11 +328,12 @@ class Session:
 
             page_source = self.driver.page_source
             user_id_match = re.search(
-                r'(?<="userInfo":\{"user":\{"id":")\d{5,30}', page_source)
+                r'(?<="userInfo":\{"user":\{"id":")\d{1,30}', page_source)
             user_id = user_id_match.group(0) if user_id_match else None
             self.logger.debug(f"user id is: {user_id}")
 
             if user_id is None:
+                self.logger.error('Cannot find user_id in page source, trying again...')
                 return "try again"
 
             url = f"https://www.tiktok.com/messages?lang=en&u={user_id}"
