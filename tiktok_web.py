@@ -443,7 +443,15 @@ class Session:
             threshold = 2  # Adjust the threshold as needed
 
             while True:
-                self.__wait(LOCATORS['SEARCH_user_container'], 5)
+                try:
+                    self.__wait(LOCATORS['SEARCH_user_container'], 10)
+                except:
+                    self.driver.refresh()
+                    try:
+                        self.__wait(LOCATORS['SEARCH_user_container'], 10)
+                    except:
+                        return None
+
                 try:
                     elements = WebDriverWait(self.driver, 0).until(EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
                 except WaitException:
