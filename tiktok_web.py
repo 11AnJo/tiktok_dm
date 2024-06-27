@@ -62,7 +62,7 @@ LOCATORS = {
     "PROFILE_user-more_3_dots": '//div[@role="button" and @aria-label="Actions" and @data-e2e="user-more"]',
     "PROFILE_MORE_send_message": '//p[text()="Send message"]',
     "PROFILE_profile_not_found": '//p[text()="Couldn\'t find this account"]',
-    "DM_input_box": '//div[@aria-label="Send a message..."]',
+    "DM_input_box": '//div[@aria-label="Send a message..." or @class="public-DraftEditorPlaceholder-inner"]',
     "DM_send_button": '//div//*[@role="button" and @data-e2e="message-send"]',
     "DM_previous_msg": '//div[@data-e2e="chat-item"]',
     "DM_WARN": "//div[@data-e2e='dm-warning']//*[@xmlns='http://www.w3.org/2000/svg']",
@@ -76,6 +76,7 @@ LOCATORS = {
     "DM_WARN_draft_violated_new": '//*[text()="This message violated our Community Guidelines. We restrict certain content and actions to protect our community. If you believe this was a mistake, tap "]',
     "DM_WARN_temporary_ban": '//*[text()="Due to multiple Community Guideline violations, you’re temporarily prevented from sending and receiving messages. View details in your app notifications."]',
     "DM_WARN_draft_violated": '//*[text()="This message violated our Community Guidelines. We restrict certain content and actions to protect our community. If you believe this was a mistake, tap"]',
+    "DM_WARN_account_ban": '//*[text()="This account can’t send or receive messages due to multiple Community Guidelines violations."]',
     "SEARCH_no_more_results": '//div[text()="No more results"]',
     "SEARCH_user_container": '//div[@data-e2e="search-user-container"]',
     "SEARCH_user_container_href": './/a[@data-e2e="search-user-info-container"]',
@@ -89,8 +90,6 @@ LOCATORS = {
     "LOGIN_2fa_submit": ".//button[@type='submit' and text()='Next']",
     "LOGIN__submit": ".//button[@type='submit' and text()='Log in']",
     "COOKIES_decline": ".//button[@text='Decline all']"
-
-
 }
 
 
@@ -138,13 +137,15 @@ def initialize_log(name_of_log, debug=False):
 
 
 class Session:
-    def __init__(self, profile_name=None, username=None, password=None, token=None, debug=False):
+    def __init__(self, profile_name=None, username=None, password=None, token=None, proxy=None,debug=False):
         self.profile_name = profile_name
         self.username = username
         self.password = password
         self.token = token
         self.is_logged = False
+        self.proxy = proxy
 
+        self.is_business = False
         self.logger = initialize_log(profile_name, debug)
         self.driver = None
 
@@ -165,11 +166,18 @@ class Session:
         options.add_argument('--disable-infobars')
         options.add_argument("--disable-default-apps")
         options.add_argument("--disable-notifications")
+        options.add_argument("--disable-notifications")
+
+        if self.proxy:
+            options.add_argument(f"--proxy-server={self.proxy}")
+
+        
         #options.add_argument('--headless=new')
 
         return uc.Chrome(options=options,
                          # driver_executable_path='chromedriver',
-                         #browser_executable_path=r"C:\\Users\\test\\Desktop\\chromedriver\\chrome.exe", driver_executable_path="C:\\Users\\test\\Desktop\\chromedriver\\chromedriver.exe")
+                         #browser_executable_path=r"C:\\Users\\test\\Desktop\\chromedriver\\chrome.exe", 
+                         #driver_executable_path="C:\\Users\\test\\Desktop\\chromedriver\\chromedriver.exe")
         )
     def __wait_and_click(self, xpath, time=5):
         self.logger.debug(
@@ -220,23 +228,6 @@ class Session:
         action.click()
         action.send_keys(text)
         action.perform()
-
-    # def __paste_text_like_human(self, xpath, text, time_to_wait=0, min_delay=0.1, max_delay=0.5):
-    #    self.logger.debug(f"paste_text_like_human() called with xpath: {xpath}, text: {text}")
-    #    print(f'msg: {text}')
-    #    input("DALEJ")
-    #    # Wait for the element and focus it by clicking
-    #    element = self.__wait(xpath, time_to_wait)
-    #    element.click()
-    #
-    #    # Optionally clear existing text
-    #
-    #    # Type out the new text character by character with random delays
-    #    for char in text:
-    #        action = ActionChains(self.driver)
-    #        action.send_keys_to_element(element, char)
-    #        action.perform()
-    #        time.sleep(random.uniform(min_delay, max_delay))  # Delay to mimic human typing
 
     def __is_element_present(self, xpath, time_to_wait=0):
         wait = WebDriverWait(self.driver, time_to_wait)
@@ -335,8 +326,11 @@ class Session:
             if user_id is None:
                 self.logger.error('Cannot find user_id in page source, trying again...')
                 return "try again"
-
-            url = f"https://www.tiktok.com/messages?lang=en&u={user_id}"
+            
+            if self.is_business:
+                url = f"https://www.tiktok.com/messages?allow_label=true&lang=en&scene=business&u={user_id}"
+            else:
+                url = f"https://www.tiktok.com/messages?lang=en&u={user_id}"
             self.driver.get(url)
 
             try:
@@ -404,6 +398,10 @@ class Session:
                     self.logger.info(
                         f"draft violated, adding to banned_drafts.txt")
                     return "draft banned"
+                elif self.__is_element_present(LOCATORS["DM_WARN_account_ban"]):
+                    self.logger.info(
+                        f"Target account banned")
+                    return "target acc banned"
                 elif self.__is_element_present(LOCATORS['DM_WARN_temporary_ban']):
                     self.logger.warning("Account temporarily banned")
                     return "acc banned"
@@ -567,7 +565,7 @@ class Session:
     @ensure_logged
     def dm_cleaner(self):
         self.driver.get('https://www.tiktok.com/messages?lang=en')
-        sleep(10)
+        sleep(5)
 
         while self.__is_element_present('//*[@data-e2e="chat-list-item"]'):
             chat_item = self.__wait('//*[@data-e2e="chat-list-item"]', 2)
@@ -581,6 +579,7 @@ class Session:
             self.__wait('//p[text()="Delete"]', 2)
             self.__wait_and_click(
                 '//p[text()="Delete"]/..//*[@fill="currentColor"]')
+            sleep(0.2)
 
         self.logger.info('All finished!')
 
@@ -646,22 +645,36 @@ class Session:
         self.driver.get(f'https://www.tiktok.com/@{self.profile_name}')
         sleep(5)
 
+        # Click on the 'following' span if present
         if self.__is_element_present('//div//span[@data-e2e="following"]'):
             self.__wait_and_click('//div//span[@data-e2e="following"]')
 
         while True:
             try:
+                following_clicked = False
+                friends_clicked = False
+
+                # Check and click 'Following' button
                 if self.__is_element_present('//div//button[text()="Following"]'):
                     self.__wait_and_click('//button[text()="Following"]')
-                else:
-                    if self.__is_element_present('//button[text()="Friends"]'):
-                        self.__wait_and_click('//button[text()="Friends"]')
-            except:
-                if self.__is_element_present('//button[text()="Following"]' and '//button[text()="Friends"]'):
-                    continue
-                else:
+                    following_clicked = True
+
+                # Check and click 'Friends' button
+                if self.__is_element_present('//button[text()="Friends"]'):
+                    self.__wait_and_click('//button[text()="Friends"]')
+                    friends_clicked = True
+
+                # If neither button was clicked, exit the loop
+                if not following_clicked and not friends_clicked:
                     self.logger.info('All finished!')
-                    return ('All finished!')
+                    return 'All finished!'
+
+            except Exception as e:
+                self.logger.error(f'Error: {e}')
+                if not (self.__is_element_present('//button[text()="Following"]') or self.__is_element_present('//button[text()="Friends"]')):
+                    self.logger.info('All finished!')
+                    return 'All finished!'
+
 
     @ensure_logged
     def unarchiver(self):
@@ -722,6 +735,9 @@ class Session:
         self.driver.get('https://tiktok.com/messages?lang=en')
         time.sleep(2)
         if 'https://www.tiktok.com/login' not in self.driver.current_url:
+            if '/business-suite/messages' in self.driver.current_url:
+                self.logger.info('business account detected')
+                self.is_business = True
             self.is_logged = True
             return True
 
