@@ -77,6 +77,7 @@ LOCATORS = {
     "DM_WARN_temporary_ban": '//*[text()="Due to multiple Community Guideline violations, you’re temporarily prevented from sending and receiving messages. View details in your app notifications."]',
     "DM_WARN_draft_violated": '//*[text()="This message violated our Community Guidelines. We restrict certain content and actions to protect our community. If you believe this was a mistake, tap"]',
     "DM_WARN_account_ban": '//*[text()="This account can’t send or receive messages due to multiple Community Guidelines violations."]',
+    "DM_WARN_limit_reached": '//*[text()="Chat messages limit reached. You will not be able to send messages to this user."]',
     "SEARCH_no_more_results": '//div[text()="No more results"]',
     "SEARCH_user_container": '//div[@data-e2e="search-user-container"]',
     "SEARCH_user_container_href": './/a[@data-e2e="search-user-info-container"]',
@@ -86,7 +87,9 @@ LOCATORS = {
     "CAPTCHA_exist": './/div[@role="dialog"]//div//div//a//span[text()="Report a problem"]',
     "LOGIN_email_or_username": './/input[@placeholder="Email or username"]',
     "LOGIN_password": './/input[@placeholder="Password"]',
-    "LOGIN_2fa": './/input[@placeholder="Enter 6-digit code"]',
+    "LOGIN_2fa_otp":"//p[text()='Use the code from your authenticator app to verify your account.']",
+    "LOGIN_2fa_mail":"//p[contains(text(),'Your code was emailed to ')]",
+    "LOGIN_2fa_input": './/input[@placeholder="Enter 6-digit code"]',
     "LOGIN_2fa_submit": ".//button[@type='submit' and text()='Next']",
     "LOGIN__submit": ".//button[@type='submit' and text()='Log in']",
     "COOKIES_decline": ".//button[@text='Decline all']"
@@ -137,7 +140,7 @@ def initialize_log(name_of_log, debug=False):
 
 
 class Session:
-    def __init__(self, profile_name=None, username=None, password=None, token=None, proxy=None,debug=False):
+    def __init__(self, profile_name=None, username=None, password=None, token=None, proxy=None, debug=False):
         self.profile_name = profile_name
         self.username = username
         self.password = password
@@ -166,24 +169,25 @@ class Session:
         options.add_argument('--disable-infobars')
         options.add_argument("--disable-default-apps")
         options.add_argument("--disable-notifications")
-        options.add_argument("--disable-notifications")
+        options.add_argument("--disable-site-isolation-trials")
+        #options.add_argument("--headless=new")
 
         if self.proxy:
             options.add_argument(f"--proxy-server={self.proxy}")
 
-        
-        #options.add_argument('--headless=new')
+        # options.add_argument('--headless=new')
 
         return uc.Chrome(options=options,
                          # driver_executable_path='chromedriver',
-                         #browser_executable_path=r"C:\\Users\\test\\Desktop\\chromedriver\\chrome.exe", 
-                         #driver_executable_path="C:\\Users\\test\\Desktop\\chromedriver\\chromedriver.exe")
-        )
-    def __wait_and_click(self, xpath, time=5):
+                         browser_executable_path=r"C:\\Users\\test\\Desktop\\chrome\\chrome.exe",
+                         driver_executable_path="C:\\Users\\test\\Desktop\\chrome\\chromedriver.exe")
+        # )
+
+    def __wait_and_click(self, xpath, time=5, webelement=""):
         self.logger.debug(
             f'__wait_and_click() - called with xpath: {xpath}, time: {time}')
         try:
-            button = WebDriverWait(self.driver, time).until(
+            button = WebDriverWait(self.driver if webelement == "" else webelement, time).until(
                 EC.element_to_be_clickable((By.XPATH, xpath)))
 
             button.click()
@@ -202,11 +206,12 @@ class Session:
             raise WaitAndClickException(
                 f"Stopping execution due to failure to click on element: {xpath}") from e
 
-    def __wait(self, xpath, time=5):
+    def __wait(self, xpath, time=5, webelement=""):
         self.logger.debug(
             f'__wait() - called with xpath: {xpath}, time: {time}')
         try:
-            return WebDriverWait(self.driver, time).until(EC.presence_of_element_located((By.XPATH, xpath)))
+            return WebDriverWait(self.driver if webelement == "" else webelement, time).until(EC.presence_of_element_located((By.XPATH, xpath)))
+
         except Exception as e:
             self.logger.debug(
                 f"Could not wait for the element with xpath: {xpath}")
@@ -216,6 +221,18 @@ class Session:
                 input("Found Captcha,")
                 return self.__wait_and_click(xpath, time)
 
+            raise WaitException(
+                f"Stopping execution due to failure in waiting for element: {xpath}") from e
+
+    def __wait_for_all(self, xpath, time=5):
+        self.logger.debug(
+            f'__wait_for_all() - called with xpath: {xpath}, time: {time}')
+
+        try:
+            return WebDriverWait(self.driver, time).until(EC.presence_of_all_elements_located((By.XPATH, xpath)))
+        except Exception as e:
+            self.logger.debug(
+                f"Could not wait for the element with xpath: {xpath}. Error: {str(e)}")
             raise WaitException(
                 f"Stopping execution due to failure in waiting for element: {xpath}") from e
 
@@ -302,6 +319,30 @@ class Session:
         # Add the cookie
         self.driver.add_cookie(cookie)
 
+    def __send_in_chat(self,msg):      
+        while True:
+            self.__paste_text(LOCATORS['DM_input_box'], 'aaaaaa')
+            self.__paste_text(LOCATORS['DM_input_box'], 'aaaa')
+            self.__paste_text(LOCATORS['DM_input_box'], 'aaaa')
+
+
+            self.__wait(LOCATORS['DM_input_box']).send_keys(Keys.CONTROL + "a")
+            self.__wait(LOCATORS['DM_input_box']).send_keys(Keys.DELETE)
+
+
+            self.__paste_text(LOCATORS['DM_input_box'], msg)
+
+            if self.__wait(LOCATORS['DM_input_box']).text == msg:
+                try:
+                    self.__wait_and_click(LOCATORS['DM_send_button'], 1)
+                    self.__wait(LOCATORS['DM_previous_msg'], 5)
+
+                    break
+                except WaitException:
+                    return 'try again'
+            else: 
+                continue
+
     @ensure_logged
     def send_msg(self, username, msg, send_if_msg_before=True):
         try:
@@ -324,9 +365,10 @@ class Session:
             self.logger.debug(f"user id is: {user_id}")
 
             if user_id is None:
-                self.logger.error('Cannot find user_id in page source, trying again...')
+                self.logger.error(
+                    'Cannot find user_id in page source, trying again...')
                 return "try again"
-            
+
             if self.is_business:
                 url = f"https://www.tiktok.com/messages?allow_label=true&lang=en&scene=business&u={user_id}"
             else:
@@ -334,7 +376,7 @@ class Session:
             self.driver.get(url)
 
             try:
-                self.__wait(LOCATORS['DM_input_box'], 15)
+                self.__wait('//p[@data-e2e="chat-uniqueid"]', 60)
                 sleep(0.5)
             except WaitException:
                 self.logger.error("Cannot find dm input box")
@@ -350,20 +392,7 @@ class Session:
                     self.logger.debug("Message before")
                     return "Message before"
 
-            self.__paste_text(LOCATORS['DM_input_box'], msg)
-
-            if self.__is_element_present(LOCATORS['DM_send_button']):
-                self.logger.debug("didnt sent automatically")
-                try:
-                    self.__wait_and_click(LOCATORS['DM_send_button'], 0)
-                except WaitException:
-                    return 'try again'
-
-            try:
-                self.__wait(LOCATORS['DM_previous_msg'], 3)
-            except:
-                return 'try again'
-
+            self.__send_in_chat(msg)
 
             if self.__is_element_present(LOCATORS["DM_WARN"], 0):
                 if self.__is_element_present(LOCATORS["DM_WARN_only_friends"]):
@@ -409,12 +438,15 @@ class Session:
                     self.logger.info(
                         f"message not sent to {username} - privacy settings")
                     return "privacy settings"
-                
+                elif self.__is_element_present(LOCATORS['DM_WARN_limit_reached']):
+                    self.logger.info(
+                        f"message not sent to {username} - chat limit reached")
+                    return "chat limit reached"
 
                 else:
                     self.logger.info(
                         f"message not sent - Unknown DM warn - {username} id: {user_id}")
-                    with open("error.html", "w") as f:
+                    with open("error.html", "w", encoding='utf-8') as f:
                         f.write(self.driver.page_source)
 
                     return "Unknown DM warn"
@@ -451,18 +483,23 @@ class Session:
                         return None
 
                 try:
-                    elements = WebDriverWait(self.driver, 0).until(EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
+                    elements = WebDriverWait(self.driver, 0).until(
+                        EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
                 except WaitException:
-                    self.logger.info(f"no usernames found with search phrase: {searched_phrase}, trying again")
+                    self.logger.info(
+                        f"no usernames found with search phrase: {searched_phrase}, trying again")
                     try:
-                        elements = WebDriverWait(self.driver, 0).until(EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
+                        elements = WebDriverWait(self.driver, 0).until(
+                            EC.presence_of_all_elements_located((By.XPATH, LOCATORS['SEARCH_user_container'])))
                     except WaitException:
-                        self.logger.error(f"no usernames found with search phrase: {searched_phrase}")           
+                        self.logger.error(
+                            f"no usernames found with search phrase: {searched_phrase}")
                         return usernames
 
                 old_len = len(usernames)
                 for el in elements:
-                    username = el.find_element(by=By.XPATH, value=LOCATORS['SEARCH_user_container_href']).get_attribute("href").replace("https://www.tiktok.com/@", "").replace("?lang=en", "")
+                    username = el.find_element(by=By.XPATH, value=LOCATORS['SEARCH_user_container_href']).get_attribute(
+                        "href").replace("https://www.tiktok.com/@", "").replace("?lang=en", "")
 
                     # -------skip if verified
                     if skip_verified:
@@ -531,44 +568,65 @@ class Session:
             return "could not scrape user data"
 
     @ensure_logged
-    def dm_blocker(self):
+    def dm_blocker_deleter(self):     
+
         self.driver.get('https://www.tiktok.com/messages?lang=en')
-        sleep(3)
 
-        while self.__is_element_present('//*[@data-e2e="chat-list-item"]'):
-            chat_item = self.__wait('//*[@data-e2e="chat-list-item"]')
+        try:
+            self.__wait('//div[@data-e2e="chat-list-item"]',10)
+        except WaitException:
+            return 'chats not loading or all messages done'
 
-            sleep(1)
-            actions = ActionChains(self.driver)
-            actions.move_to_element(chat_item).perform()
-            print("waiting...")
+        while True:
+            #self.driver.get('https://www.tiktok.com/messages?lang=en')
 
-            self.__wait_and_click('//*[@data-e2e="more-action-icon"]')
-            sleep(0.5)
+            if self.__is_element_present('//p[contains(@class, "InfoNickname") and string-length(text()) > 0]',10):
+                chat_item = self.__wait_for_all('//p[contains(@class, "InfoNickname") and string-length(text()) > 0]')[0]
 
-            if self.__is_element_present('//div//p[text()="Unblock"]'):
-                self.__wait_and_click(
-                '//p[text()="Delete"]/..//*[@fill="currentColor"]')
-                sleep(0.5)
-            else:
-                self.__wait_and_click(
-                    '//p[text()="Block"]/..//*[@fill="currentColor"]')
-                sleep(0.5)
+                ActionChains(self.driver).scroll_to_element(chat_item).perform()
+                ActionChains(self.driver).move_to_element(chat_item).perform()
+                sleep(1)
+                input('click more action')
+                self.__wait_and_click('//*[@data-e2e="more-action-icon"]',5,chat_item)
 
-            self.__wait_and_click('//*[@data-e2e="more-action-icon"]')
-            self.__wait_and_click(
-                '//p[text()="Delete"]/..//*[@fill="currentColor"]')
-            sleep(0.5)
+                if self.__is_element_present('//p[text()="Block"]') :
+                    input('block?')
+                    self.__wait_and_click('//p[text()="Block"]')
+                    ActionChains(self.driver).scroll_to_element(chat_item).perform()
+                    ActionChains(self.driver).move_to_element(chat_item).perform()
+                    
 
-        self.logger.info('All finished!')
+                    input('click more actions')
+                    self.__wait_and_click('//*[@data-e2e="more-action-icon"]',5,chat_item)
+                    
+                    input('delete')
+                    self.__wait_and_click('//p[text()="Delete"]/..//*[@fill="currentColor"]')
 
-    @ensure_logged
-    def dm_cleaner(self):
+                else:
+                    print('blocked')
+                    input('delete')
+
+                    self.__wait_and_click('//p[text()="Delete"]/..//*[@fill="currentColor"]')
+
+                #input('next?')
+            elif self.__is_element_present('//div[@data-e2e="chat-list-item"]'):
+                self.driver.get('https://www.tiktok.com/messages?lang=en')
+                try:
+                    self.__wait('//div[@data-e2e="chat-list-item"]',10)
+                except WaitException:
+                    self.logger.info('All finished!')
+                    return 'all messages done'
+
+
+
+
+    @ensure_logged 
+    def dm_deleter(self):
         self.driver.get('https://www.tiktok.com/messages?lang=en')
-        sleep(5)
+        sleep(10)
 
-        while self.__is_element_present('//*[@data-e2e="chat-list-item"]'):
-            chat_item = self.__wait('//*[@data-e2e="chat-list-item"]', 2)
+        while self.__is_element_present('//*[@data-e2e="chat-list-item"]', 200):
+            chat_item = self.__wait('//*[@data-e2e="chat-list-item"]', 200)
 
             actions = ActionChains(self.driver)
             actions.move_to_element(chat_item).perform()
@@ -649,6 +707,8 @@ class Session:
         if self.__is_element_present('//div//span[@data-e2e="following"]'):
             self.__wait_and_click('//div//span[@data-e2e="following"]')
 
+        sleep(1)
+        
         while True:
             try:
                 following_clicked = False
@@ -675,7 +735,6 @@ class Session:
                     self.logger.info('All finished!')
                     return 'All finished!'
 
-
     @ensure_logged
     def unarchiver(self):
         self.driver.get(f'https://www.tiktok.com/@{self.profile_name}')
@@ -697,9 +756,9 @@ class Session:
                 sleep(1)
 
                 # Change privacy to public
-                self.__wait_and_click('.//p[text()="Private"]')
+                self.__wait_and_click('.//*[@data-e2e="video-setting-choose"]')
                 sleep(1)  # Wait for the click to take effect
-                self.__wait_and_click('.//p[text()="Public"]')
+                self.__wait_and_click('.//p[text()="Everyone"]')
                 sleep(1)  # Wait for the click to take effect
 
                 # Click "Done" text
@@ -722,12 +781,18 @@ class Session:
         new_code = totp.now()
         return new_code
 
+    
     def login(self):
+        if self.driver is None:
+            self.driver = self._init_driver()
+
         def wait_for_possible_el():
             return self.__wait_for_first_element_or_url([
                 LOCATORS['CAPTCHA_exist'],
-                LOCATORS['LOGIN_2fa'],
-                "https://www.tiktok.com/foryou"
+                LOCATORS['LOGIN_2fa_otp'],
+                LOCATORS['LOGIN_2fa_mail'],
+                "https://www.tiktok.com/foryou",
+
             ], 20)
 
         self.logger.debug(f"login() called")
@@ -766,7 +831,7 @@ class Session:
 
         resp = wait_for_possible_el()
 
-        if resp == 0:
+        def when_captcha():
             self.logger.warning(
                 "Found Captcha, please complete it manually")
 
@@ -776,17 +841,35 @@ class Session:
                     continue
                 time.sleep(1)
                 break
+        if resp == 0:
+            when_captcha()
             resp = wait_for_possible_el()
+
 
         if resp == 1:
             self.logger.debug("2fa input found")
             code = self.__generate_2factor_code(self.token)
-            self.__paste_text(LOCATORS['LOGIN_2fa'], code, 0)
+            self.__paste_text(LOCATORS['LOGIN_2fa_input'], code, 0)
             time.sleep(1)
             self.__wait_and_click(LOCATORS['LOGIN_2fa_submit'], 0)
             resp = wait_for_possible_el()
+            if resp == 0:
+                when_captcha()
+                resp = wait_for_possible_el()
 
         if resp == 2:
+            self.logger.debug("2fa mail input found")
+            self.logger.warning('mail 2fa found.')
+            input('paste the code and click enter')
+            self.__wait_and_click(LOCATORS['LOGIN_2fa_submit'], 0)
+
+            resp = wait_for_possible_el()
+            if resp == 0:
+                when_captcha()
+                resp = wait_for_possible_el()
+
+
+        if resp == 3:
             self.is_logged = True
             # self.__wait_and_click(LOCATORS['COOKIES_decline'],1)
             # time.sleep(2)\
