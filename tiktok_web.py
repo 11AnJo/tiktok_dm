@@ -62,7 +62,7 @@ LOCATORS = {
     "PROFILE_user-more_3_dots": '//div[@role="button" and @aria-label="Actions" and @data-e2e="user-more"]',
     "PROFILE_MORE_send_message": '//p[text()="Send message"]',
     "PROFILE_profile_not_found": '//p[text()="Couldn\'t find this account"]',
-    "DM_input_box": '//div[@aria-label="Send a message..." or @class="public-DraftEditorPlaceholder-inner"]',
+    "DM_input_box": '//div[@aria-label="Send a message..." and @role="textbox"]',
     "DM_send_button": '//div//*[@role="button" and @data-e2e="message-send"]',
     "DM_previous_msg": '//div[@data-e2e="chat-item"]',
     "DM_WARN": "//div[@data-e2e='dm-warning']//*[@xmlns='http://www.w3.org/2000/svg']",
@@ -321,15 +321,12 @@ class Session:
 
     def __send_in_chat(self,msg):      
         while True:
-            self.__paste_text(LOCATORS['DM_input_box'], 'aaaaaa')
-            self.__paste_text(LOCATORS['DM_input_box'], 'aaaa')
-            self.__paste_text(LOCATORS['DM_input_box'], 'aaaa')
+            if self.__wait(LOCATORS['DM_input_box']).text not in ['Send a message...','',None]:
+                self.logger.info(self.__wait(LOCATORS['DM_input_box']).text)
+                self.__wait(LOCATORS['DM_input_box']).send_keys(Keys.CONTROL + "a")
+                self.__wait(LOCATORS['DM_input_box']).send_keys(Keys.DELETE)
 
-
-            self.__wait(LOCATORS['DM_input_box']).send_keys(Keys.CONTROL + "a")
-            self.__wait(LOCATORS['DM_input_box']).send_keys(Keys.DELETE)
-
-
+            #self.__wait(LOCATORS['DM_input_box'])
             self.__paste_text(LOCATORS['DM_input_box'], msg)
 
             if self.__wait(LOCATORS['DM_input_box']).text == msg:
@@ -392,7 +389,9 @@ class Session:
                     self.logger.debug("Message before")
                     return "Message before"
 
-            self.__send_in_chat(msg)
+            r = self.__send_in_chat(msg)
+            if r:
+                return r
 
             if self.__is_element_present(LOCATORS["DM_WARN"], 0):
                 if self.__is_element_present(LOCATORS["DM_WARN_only_friends"]):
