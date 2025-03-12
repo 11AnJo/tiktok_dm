@@ -140,14 +140,17 @@ def initialize_log(name_of_log, debug=False):
 
 
 class Session:
-    def __init__(self, profile_name=None, username=None, password=None, token=None, proxy=None, debug=False):
+    def __init__(self, profile_name=None, username=None, password=None, token=None, proxy=None, browser_executable_path=None, driver_executable_path=None, debug=False):
         self.profile_name = profile_name
         self.username = username
         self.password = password
         self.token = token
         self.is_logged = False
         self.proxy = proxy
-
+    
+        self.browser_executable_path = browser_executable_path
+        self.driver_executable_path = driver_executable_path
+            
         self.is_business = False
         self.logger = initialize_log(profile_name, debug)
         self.driver = None
@@ -179,8 +182,8 @@ class Session:
 
         return uc.Chrome(options=options,
                          # driver_executable_path='chromedriver',
-                         browser_executable_path=r"C:\\Users\\test\\Desktop\\chrome\\chrome.exe",
-                         driver_executable_path="C:\\Users\\test\\Desktop\\chrome\\chromedriver.exe")
+                         browser_executable_path=self.browser_executable_path,
+                         driver_executable_path=self.driver_executable_path)
         # )
 
     def __wait_and_click(self, xpath, time=5, webelement=""):
