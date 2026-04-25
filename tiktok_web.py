@@ -63,7 +63,7 @@ LOCATORS = {
     "PROFILE_MORE_send_message": '//p[text()="Send message"]',
     "PROFILE_profile_not_found": '//p[text()="Couldn\'t find this account"]',
     "DM_input_box": '//div[@aria-label="Send a message..." and @role="textbox"]',
-    "DM_send_button": '//div//*[@role="button" and @data-e2e="message-send"]',
+    'DM_send_button': '//*[contains(@class, "StyledSendButton")]',
     "DM_previous_msg": '//div[@data-e2e="chat-item"]',
     "DM_WARN": "//div[@data-e2e='dm-warning']//*[@xmlns='http://www.w3.org/2000/svg']",
     "DM_WARN_too_fast": "//div[text()='You are sending messages too fast. Take a rest.']",
